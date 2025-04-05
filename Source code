@@ -1,0 +1,98 @@
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+#include <DHT.h>
+
+// Wi-Fi & Blynk Credentials
+char auth[] = "Your_Blynk_Auth_Token";     // Replace with your Blynk Auth Token
+char ssid[] = "Your_WiFi_SSID";            // Replace with your Wi-Fi SSID
+char pass[] = "Your_WiFi_Password";        // Replace with your Wi-Fi password
+
+// Sensor Pins
+#define PIR_PIN 13                  // PIR Motion Sensor Digital Pin
+#define MOISTURE_SENSOR_PIN 34      // Soil Moisture Analog Pin (ADC1)
+#define LDR_PIN 32                  // LDR Sensor Analog Pin (ADC1)
+#define DHT_PIN 2                   // DHT Sensor Digital Pin
+#define RELAY_PIN 5                 // Relay Module Digital Pin
+
+// DHT Configuration
+#define DHT_TYPE DHT11              // or DHT22 based on your sensor
+DHT dht(DHT_PIN, DHT_TYPE);
+
+// Virtual Pins for Blynk App
+#define V_MOISTURE  V1
+#define V_TEMPHUM   V2
+#define V_MOTION    V3
+#define V_DAYLIGHT  V4
+#define V_RELAY     V5
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+
+  pinMode(PIR_PIN, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW); // System OFF initially
+
+  // Start Wi-Fi & Blynk
+  WiFi.begin(ssid, pass);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("WiFi connected");
+
+  Blynk.begin(auth, ssid, pass);
+}
+
+void loop() {
+  Blynk.run();
+
+  // ---------- Soil Moisture Sensor ----------
+  int moistureValue = analogRead(MOISTURE_SENSOR_PIN);
+  Serial.print("Soil Moisture: ");
+  Serial.println(moistureValue);
+
+  // ---------- LDR Day-Night Cycle ----------
+  int ldrValue = analogRead(LDR_PIN);
+  Serial.print("LDR Value: ");
+  Serial.println(ldrValue);
+
+  bool isDaylight = (ldrValue > 500); // Adjust threshold if needed
+  Blynk.virtualWrite(V_DAYLIGHT, isDaylight ? "Day" : "Night");
+
+  // Turn ON/OFF system based on sunlight
+  if (isDaylight) {
+    // ---------- Auto Watering Logic ----------
+    if (moistureValue < 500) { // Soil is dry
+      digitalWrite(RELAY_PIN, HIGH);
+      Blynk.virtualWrite(V_RELAY, 1);
+    } else { // Soil is wet
+      digitalWrite(RELAY_PIN, LOW);
+      Blynk.virtualWrite(V_RELAY, 0);
+    }
+    Blynk.virtualWrite(V_MOISTURE, "Dry");
+  } else {
+    digitalWrite(RELAY_PIN, LOW);  // System OFF at night
+    Blynk.virtualWrite(V_MOISTURE, "Night");
+    Blynk.virtualWrite(V_RELAY, 0);
+  }
+
+  // ---------- PIR Motion Detection ----------
+  int motionDetected = digitalRead(PIR_PIN);
+  Serial.print("Motion: ");
+  Serial.println(motionDetected);
+  Blynk.virtualWrite(V_MOTION, motionDetected);
+
+  // ---------- DHT Sensor Readings ----------
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+  if (!isnan(temperature) && !isnan(humidity)) {
+    String tempHum = String(temperature) + " °C / " + String(humidity) + " %";
+    Serial.println(tempHum);
+    Blynk.virtualWrite(V_TEMPHUM, tempHum);
+  } else {
+    Serial.println("DHT Sensor Error");
+  }
+
+  delay(2000); // Wait 2s before next reading
+}

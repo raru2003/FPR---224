@@ -1,0 +1,7 @@
+Widgets to Configure in Blynk App (Classic or Blynk IoT)
+Sensor/Action	Widget Type	Virtual Pin
+Soil Moisture	Label / Value	V1
+Temperature & Hum.	Label / Value	V2
+PIR Motion Detect	LED / Value	V3
+Day/Night Status	Label	V4
+Relay Status	LED / Button	V5
